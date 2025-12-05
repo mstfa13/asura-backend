@@ -9,29 +9,19 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const SECRET_KEY = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// CORS configuration for production
-const allowedOrigins = [
-  'http://localhost:8080',
-  'http://localhost:5173',
-  process.env.FRONTEND_URL, // Set this in production
-].filter(Boolean);
-
+// Simple CORS - allow frontend
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'https://asura-frontend-mu.vercel.app'
+  ],
   credentials: true
 }));
 
 app.use(express.json());
 
-// Health check endpoint (for Railway/Render)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -54,8 +44,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- Auth Routes ---
-
 // Register
 app.post('/api/register', (req, res) => {
   const { username, password } = req.body;
@@ -75,7 +63,6 @@ app.post('/api/register', (req, res) => {
         }
         return res.status(500).json({ error: err.message });
       }
-      
       const token = jwt.sign({ id: this.lastID, username }, SECRET_KEY, { expiresIn: '24h' });
       res.json({ token, user: { id: this.lastID, username } });
     }
@@ -102,9 +89,7 @@ app.post('/api/login', (req, res) => {
   );
 });
 
-// --- Data Routes ---
-
-// Get User Data (Generic)
+// Get User Data
 app.get('/api/data/:key', authenticateToken, (req, res) => {
   const userId = req.user.id;
   const key = req.params.key;
@@ -114,8 +99,8 @@ app.get('/api/data/:key', authenticateToken, (req, res) => {
     [userId, key],
     (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
-      if (!row) return res.json({ data: null }); // Return null if no data found yet
-      
+      if (!row) return res.json({ data: null });
+
       try {
         res.json({ data: JSON.parse(row.value) });
       } catch (e) {
@@ -125,7 +110,7 @@ app.get('/api/data/:key', authenticateToken, (req, res) => {
   );
 });
 
-// Save User Data (Generic)
+// Save User Data
 app.post('/api/data/:key', authenticateToken, (req, res) => {
   const userId = req.user.id;
   const key = req.params.key;
@@ -147,5 +132,4 @@ app.post('/api/data/:key', authenticateToken, (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
