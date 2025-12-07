@@ -85,6 +85,56 @@ app.post('/api/data/:key', authenticateToken, (req, res) => {
   });
 });
 
+// Admin endpoints (protected by ADMIN_SECRET)
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-this-secret';
+
+const authenticateAdmin = (req, res, next) => {
+  const adminKey = req.headers['x-admin-key'];
+  if (!adminKey || adminKey !== ADMIN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+// List all users (like Firebase Auth console)
+app.get('/api/admin/users', authenticateAdmin, (req, res) => {
+  db.all('SELECT id, username, created_at FROM users', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ users: rows, total: rows.length });
+  });
+});
+
+// Get all data for a specific user (like Firebase Database)
+app.get('/api/admin/users/:userId/data', authenticateAdmin, (req, res) => {
+  const userId = req.params.userId;
+  db.all('SELECT key, value, updated_at FROM user_data WHERE user_id = ?', [userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const data = {};
+    rows.forEach(row => {
+      try {
+        data[row.key] = { value: JSON.parse(row.value), updated_at: row.updated_at };
+      } catch (e) {
+        data[row.key] = { value: row.value, updated_at: row.updated_at };
+      }
+    });
+    res.json({ userId, data });
+  });
+});
+
+// Get database stats
+app.get('/api/admin/stats', authenticateAdmin, (req, res) => {
+  db.get('SELECT COUNT(*) as userCount FROM users', [], (err, userRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.get('SELECT COUNT(*) as dataCount FROM user_data', [], (err, dataRow) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({
+        users: userRow.userCount,
+        dataEntries: dataRow.dataCount
+      });
+    });
+  });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log('Server on port ' + PORT);
 });
